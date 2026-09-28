@@ -211,7 +211,7 @@ async function main() {
   if (process.env.DEV_NO_ADMIN !== '1') {
     await run(
       bin('apps/admin/node_modules/.bin/vite'),
-      ['--port', '5173', '--strictPort'],
+      ['apps/admin', '--port', '5173', '--strictPort'],
       {},
       'admin',
     );

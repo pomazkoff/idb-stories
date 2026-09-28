@@ -34,6 +34,7 @@ docker compose up --build
 ```bash
 corepack enable && pnpm install
 pnpm dev:local      # админка http://localhost:5173, API :8080/:8081
+                    # витрина ленты глазами покупателя: http://localhost:5173/demo.html
 pnpm smoke          # сквозная проверка живого стенда: загрузка → согласование → лента → снятие
 ```
 

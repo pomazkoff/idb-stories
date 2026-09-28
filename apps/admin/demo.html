@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Витрина ленты — только для разработки</title>
+    <link rel="stylesheet" href="/src/demo/demo.css" />
+  </head>
+  <body>
+    <main class="demo">
+      <h1>Лента сторис глазами покупателя</h1>
+      <p class="demo__hint">
+        Только для разработки: публичная лента через веб-плеер, как на сайте ИДБ. Новые публикации
+        видны после «Обновить» (ответ ленты кешируется до 60 с).
+      </p>
+      <div class="demo__controls">
+        <label>
+          Площадка
+          <select id="placement">
+            <option value="home">Главная</option>
+            <option value="catalog">Каталог</option>
+            <option value="product">Карточка товара</option>
+            <option value="cart">Корзина</option>
+          </select>
+        </label>
+        <button id="refresh" type="button">Обновить</button>
+        <button id="reset-viewed" type="button">Сбросить «просмотрено»</button>
+      </div>
+      <section id="feed" class="demo__feed" aria-label="Лента сторис"></section>
+      <p id="empty" class="demo__empty" hidden>
+        Для этой площадки опубликованных групп нет (или API недоступен).
+      </p>
+      <h2>События плеера</h2>
+      <ol id="events" class="demo__events"></ol>
+    </main>
+    <script type="module" src="/src/demo/demo.ts"></script>
+  </body>
+</html>

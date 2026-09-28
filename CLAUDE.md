@@ -22,6 +22,7 @@ pnpm build                 # tsc + vite для всех пакетов
 
 docker compose up --build  # весь стенд: admin :8082, public API :8080, S3 :9000
 pnpm dev:local             # то же без Docker: embedded Postgres, Redis, S3-эмулятор; админка :5173
+                           # витрина ленты через веб-плеер: http://localhost:5173/demo.html (только dev)
 pnpm seed:demo             # демо-группы на запущенном стенде
 pnpm smoke                 # сквозная проверка живого стенда через HTTP и S3
 pnpm e2e                   # Playwright против стенда (E2E_BASE_URL, E2E_PUBLIC_API)

@@ -1,0 +1,50 @@
+# Проектные правила SAST (раздел 10.10). Дополняют наборы p/typescript, p/react, p/nodejsscan, p/secrets.
+rules:
+  - id: idb-no-html-injection-sinks
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: 'XSS (T3): запрещены HTML-вставки — используйте textContent / JSX'
+    pattern-either:
+      - pattern: $X.innerHTML = $Y
+      - pattern: $X.outerHTML = $Y
+      - pattern: $X.insertAdjacentHTML(...)
+      - pattern: document.write(...)
+      - pattern: document.writeln(...)
+      - pattern: $X.createContextualFragment(...)
+  - id: idb-no-dangerously-set-inner-html
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: 'XSS (T3): dangerouslySetInnerHTML запрещён'
+    pattern: <$EL dangerouslySetInnerHTML={...} />
+  - id: idb-no-eval
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: 'Запрещено выполнение строк как кода'
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: new Function(...)
+  - id: idb-no-raw-sql-with-interpolation
+    languages: [typescript]
+    severity: ERROR
+    message: 'SQL-инъекция: $queryRawUnsafe/$executeRawUnsafe только с константами или параметрами'
+    patterns:
+      - pattern-either:
+          - pattern: $P.$queryRawUnsafe(`...${$X}...`, ...)
+          - pattern: $P.$executeRawUnsafe(`...${$X}...`, ...)
+    paths:
+      exclude: ['test/**', '**/test/**', 'scripts/**']
+  - id: idb-no-logging-of-authorization
+    languages: [typescript]
+    severity: ERROR
+    message: 'Токены и cookie не логируются (раздел 10.9)'
+    pattern-either:
+      - pattern: $LOG.$M(..., $REQ.headers.authorization, ...)
+      - pattern: $LOG.$M(..., $REQ.headers.cookie, ...)
+  - id: idb-ffmpeg-must-restrict-protocols
+    languages: [typescript]
+    severity: WARNING
+    message: 'ffmpeg/ffprobe запускаются только через run() с INPUT_GUARD (protocol_whitelist file, -f mov)'
+    pattern: spawn($BIN, ...)
+    paths:
+      include: ['apps/worker/**']
+      exclude: ['apps/worker/src/media/exec.ts']

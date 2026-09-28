@@ -1,0 +1,1529 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "IDB Stories — Public API",
+    "version": "1.0.0",
+    "description": "Публичная лента сторис и приём событий. Контракт плееров: docs/player-contract.md, события: docs/analytics-events.md."
+  },
+  "servers": [
+    {
+      "url": "https://stories-api.example",
+      "description": "TODO(spec): домен публичного API"
+    }
+  ],
+  "paths": {
+    "/v1/events": {
+      "post": {
+        "operationId": "postEvents",
+        "summary": "Приём аналитических событий плееров",
+        "tags": [
+          "events"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "events": {
+                    "minItems": 1,
+                    "maxItems": 50,
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/StoryEvent"
+                    }
+                  }
+                },
+                "required": [
+                  "events"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Приняты валидные события, невалидные отброшены",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventsAccepted"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Тело не соответствует схеме батча",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Тело больше 64 КБ",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Превышен лимит запросов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/feed": {
+      "get": {
+        "operationId": "getFeed",
+        "summary": "Лента сторис для площадки",
+        "tags": [
+          "feed"
+        ],
+        "parameters": [
+          {
+            "name": "placement",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "home",
+                "catalog",
+                "product",
+                "cart"
+              ]
+            }
+          },
+          {
+            "name": "X-Platform",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ios",
+                "android",
+                "web"
+              ]
+            }
+          },
+          {
+            "name": "X-App-Version",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{1,4}(\\.\\d{1,4}){0,2}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Опубликованная лента. Анонимно — Cache-Control: public, max-age<=60; с токеном — private, no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Не хватает заголовков X-Platform/X-App-Version или параметра placement",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Превышен лимит запросов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {},
+          {
+            "customerToken": []
+          }
+        ]
+      }
+    },
+    "/v1/health": {
+      "get": {
+        "operationId": "getHealth",
+        "summary": "Readiness: API готов обслуживать запросы (без версий зависимостей)",
+        "tags": [
+          "health"
+        ],
+        "responses": {
+          "200": {
+            "description": "Готов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Не готов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/health/live": {
+      "get": {
+        "operationId": "getLiveness",
+        "summary": "Liveness: процесс жив",
+        "tags": [
+          "health"
+        ],
+        "responses": {
+          "200": {
+            "description": "Жив",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "details": {}
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "additionalProperties": false
+          },
+          "requestId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "additionalProperties": false
+      },
+      "EventsAccepted": {
+        "type": "object",
+        "properties": {
+          "accepted": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "rejected": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "accepted",
+          "rejected"
+        ],
+        "additionalProperties": false
+      },
+      "FeedCta": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "deeplink",
+              "product",
+              "category",
+              "url"
+            ]
+          },
+          "value": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "value",
+          "label"
+        ],
+        "additionalProperties": false
+      },
+      "FeedElement": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/FeedTextElement"
+          }
+        ]
+      },
+      "FeedGroup": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "version": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "title": {
+            "type": "string"
+          },
+          "cover": {
+            "$ref": "#/components/schemas/FeedMediaRef"
+          },
+          "slides": {
+            "minItems": 1,
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FeedSlide"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "title",
+          "cover",
+          "slides"
+        ],
+        "additionalProperties": false
+      },
+      "FeedImageSlide": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "elements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FeedElement"
+            }
+          },
+          "cta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeedCta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": {
+            "type": "string",
+            "const": "image"
+          },
+          "media": {
+            "type": "object",
+            "properties": {
+              "variants": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/FeedImageVariant"
+                }
+              }
+            },
+            "required": [
+              "variants"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "id",
+          "duration_ms",
+          "elements",
+          "cta",
+          "type",
+          "media"
+        ],
+        "additionalProperties": false
+      },
+      "FeedImageVariant": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "w": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "h": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "mime": {
+            "type": "string",
+            "enum": [
+              "image/webp",
+              "image/jpeg"
+            ]
+          }
+        },
+        "required": [
+          "url",
+          "w",
+          "h",
+          "mime"
+        ],
+        "additionalProperties": false
+      },
+      "FeedMediaRef": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "w": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "h": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "url",
+          "w",
+          "h"
+        ],
+        "additionalProperties": false
+      },
+      "FeedProductSlide": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "elements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FeedElement"
+            }
+          },
+          "cta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeedCta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": {
+            "type": "string",
+            "const": "product"
+          },
+          "product_skus": {
+            "minItems": 1,
+            "maxItems": 6,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "duration_ms",
+          "elements",
+          "cta",
+          "type",
+          "product_skus"
+        ],
+        "additionalProperties": false
+      },
+      "FeedResponse": {
+        "type": "object",
+        "properties": {
+          "schema_version": {
+            "type": "number",
+            "const": 1
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "ttl_sec": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60
+          },
+          "groups": {
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FeedGroup"
+            }
+          }
+        },
+        "required": [
+          "schema_version",
+          "generated_at",
+          "ttl_sec",
+          "groups"
+        ],
+        "additionalProperties": false
+      },
+      "FeedSlide": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/FeedImageSlide"
+          },
+          {
+            "$ref": "#/components/schemas/FeedVideoSlide"
+          },
+          {
+            "$ref": "#/components/schemas/FeedProductSlide"
+          }
+        ]
+      },
+      "FeedTextElement": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "text"
+          },
+          "text": {
+            "type": "string"
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "title",
+              "body",
+              "caption"
+            ]
+          },
+          "position": {
+            "type": "string",
+            "enum": [
+              "top",
+              "center",
+              "bottom"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "text",
+          "style",
+          "position"
+        ],
+        "additionalProperties": false
+      },
+      "FeedVideoSlide": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "elements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FeedElement"
+            }
+          },
+          "cta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeedCta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": {
+            "type": "string",
+            "const": "video"
+          },
+          "media": {
+            "type": "object",
+            "properties": {
+              "poster": {
+                "$ref": "#/components/schemas/FeedMediaRef"
+              },
+              "variants": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/FeedVideoVariant"
+                }
+              }
+            },
+            "required": [
+              "poster",
+              "variants"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "id",
+          "duration_ms",
+          "elements",
+          "cta",
+          "type",
+          "media"
+        ],
+        "additionalProperties": false
+      },
+      "FeedVideoVariant": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "w": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "h": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "mime": {
+            "type": "string",
+            "const": "video/mp4"
+          },
+          "bitrate_kbps": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "url",
+          "w",
+          "h",
+          "mime",
+          "bitrate_kbps"
+        ],
+        "additionalProperties": false
+      },
+      "Health": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "degraded",
+              "fail"
+            ]
+          },
+          "checks": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "ok",
+                "fail"
+              ]
+            }
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "StoriesFeedShown": {
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "ios",
+              "android",
+              "web"
+            ]
+          },
+          "app_version": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "placement": {
+            "type": "string",
+            "enum": [
+              "home",
+              "catalog",
+              "product",
+              "cart"
+            ]
+          },
+          "event": {
+            "type": "string",
+            "const": "stories_feed_shown"
+          },
+          "groups_count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20
+          },
+          "group_ids": {
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        },
+        "required": [
+          "event_id",
+          "ts",
+          "session_id",
+          "platform",
+          "app_version",
+          "placement",
+          "event",
+          "groups_count"
+        ]
+      },
+      "StoryAddToCart": {
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "ios",
+              "android",
+              "web"
+            ]
+          },
+          "app_version": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "placement": {
+            "type": "string",
+            "enum": [
+              "home",
+              "catalog",
+              "product",
+              "cart"
+            ]
+          },
+          "group_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "group_version": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "slide_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "slide_index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9
+          },
+          "slide_type": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          },
+          "event": {
+            "type": "string",
+            "const": "story_add_to_cart"
+          },
+          "sku": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,64}$"
+          }
+        },
+        "required": [
+          "event_id",
+          "ts",
+          "session_id",
+          "platform",
+          "app_version",
+          "placement",
+          "group_id",
+          "group_version",
+          "slide_id",
+          "slide_index",
+          "slide_type",
+          "event",
+          "sku"
+        ]
+      },
+      "StoryClose": {
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "ios",
+              "android",
+              "web"
+            ]
+          },
+          "app_version": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "placement": {
+            "type": "string",
+            "enum": [
+              "home",
+              "catalog",
+              "product",
+              "cart"
+            ]
+          },
+          "group_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "group_version": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "event": {
+            "type": "string",
+            "const": "story_close"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "swipe",
+              "button",
+              "end"
+            ]
+          },
+          "watched_slides": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10
+          }
+        },
+        "required": [
+          "event_id",
+          "ts",
+          "session_id",
+          "platform",
+          "app_version",
+          "placement",
+          "group_id",
+          "group_version",
+          "event",
+          "reason",
+          "watched_slides"
+        ]
+      },
+      "StoryCtaClick": {
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "ios",
+              "android",
+              "web"
+            ]
+          },
+          "app_version": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "placement": {
+            "type": "string",
+            "enum": [
+              "home",
+              "catalog",
+              "product",
+              "cart"
+            ]
+          },
+          "group_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "group_version": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "slide_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "slide_index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9
+          },
+          "slide_type": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          },
+          "event": {
+            "type": "string",
+            "const": "story_cta_click"
+          },
+          "cta_type": {
+            "type": "string",
+            "enum": [
+              "deeplink",
+              "product",
+              "category",
+              "url"
+            ]
+          },
+          "cta_value": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          }
+        },
+        "required": [
+          "event_id",
+          "ts",
+          "session_id",
+          "platform",
+          "app_version",
+          "placement",
+          "group_id",
+          "group_version",
+          "slide_id",
+          "slide_index",
+          "slide_type",
+          "event",
+          "cta_type",
+          "cta_value"
+        ]
+      },
+      "StoryEvent": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/StoriesFeedShown"
+          },
+          {
+            "$ref": "#/components/schemas/StoryGroupOpen"
+          },
+          {
+            "$ref": "#/components/schemas/StorySlideView"
+          },
+          {
+            "$ref": "#/components/schemas/StorySlideComplete"
+          },
+          {
+            "$ref": "#/components/schemas/StoryCtaClick"
+          },
+          {
+            "$ref": "#/components/schemas/StoryProductClick"
+          },
+          {
+            "$ref": "#/components/schemas/StoryAddToCart"
+          },
+          {
+            "$ref": "#/components/schemas/StoryClose"
+          },
+          {
+            "$ref": "#/components/schemas/StoryMediaError"
+          }
+        ]
+      },
+      "StoryGroupOpen": {
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "ios",
+              "android",
+              "web"
+            ]
+          },
+          "app_version": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "placement": {
+            "type": "string",
+            "enum": [
+              "home",
+              "catalog",
+              "product",
+              "cart"
+            ]
+          },
+          "group_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "group_version": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "event": {
+            "type": "string",
+            "const": "story_group_open"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "tap",
+              "swipe",
+              "auto"
+            ]
+          }
+        },
+        "required": [
+          "event_id",
+          "ts",
+          "session_id",
+          "platform",
+          "app_version",
+          "placement",
+          "group_id",
+          "group_version",
+          "event",
+          "source"
+        ]
+      },
+      "StoryMediaError": {
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "ios",
+              "android",
+              "web"
+            ]
+          },
+          "app_version": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "placement": {
+            "type": "string",
+            "enum": [
+              "home",
+              "catalog",
+              "product",
+              "cart"
+            ]
+          },
+          "group_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "group_version": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "slide_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "slide_index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9
+          },
+          "slide_type": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          },
+          "event": {
+            "type": "string",
+            "const": "story_media_error"
+          },
+          "error_code": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{1,64}$"
+          }
+        },
+        "required": [
+          "event_id",
+          "ts",
+          "session_id",
+          "platform",
+          "app_version",
+          "placement",
+          "group_id",
+          "group_version",
+          "slide_id",
+          "slide_index",
+          "slide_type",
+          "event",
+          "error_code"
+        ]
+      },
+      "StoryProductClick": {
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "ios",
+              "android",
+              "web"
+            ]
+          },
+          "app_version": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "placement": {
+            "type": "string",
+            "enum": [
+              "home",
+              "catalog",
+              "product",
+              "cart"
+            ]
+          },
+          "group_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "group_version": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "slide_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "slide_index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9
+          },
+          "slide_type": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          },
+          "event": {
+            "type": "string",
+            "const": "story_product_click"
+          },
+          "sku": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,64}$"
+          }
+        },
+        "required": [
+          "event_id",
+          "ts",
+          "session_id",
+          "platform",
+          "app_version",
+          "placement",
+          "group_id",
+          "group_version",
+          "slide_id",
+          "slide_index",
+          "slide_type",
+          "event",
+          "sku"
+        ]
+      },
+      "StorySlideComplete": {
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "ios",
+              "android",
+              "web"
+            ]
+          },
+          "app_version": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "placement": {
+            "type": "string",
+            "enum": [
+              "home",
+              "catalog",
+              "product",
+              "cart"
+            ]
+          },
+          "group_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "group_version": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "slide_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "slide_index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9
+          },
+          "slide_type": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          },
+          "event": {
+            "type": "string",
+            "const": "story_slide_complete"
+          }
+        },
+        "required": [
+          "event_id",
+          "ts",
+          "session_id",
+          "platform",
+          "app_version",
+          "placement",
+          "group_id",
+          "group_version",
+          "slide_id",
+          "slide_index",
+          "slide_type",
+          "event"
+        ]
+      },
+      "StorySlideView": {
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "session_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "ios",
+              "android",
+              "web"
+            ]
+          },
+          "app_version": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "placement": {
+            "type": "string",
+            "enum": [
+              "home",
+              "catalog",
+              "product",
+              "cart"
+            ]
+          },
+          "group_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "group_version": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "slide_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "slide_index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9
+          },
+          "slide_type": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          },
+          "event": {
+            "type": "string",
+            "const": "story_slide_view"
+          }
+        },
+        "required": [
+          "event_id",
+          "ts",
+          "session_id",
+          "platform",
+          "app_version",
+          "placement",
+          "group_id",
+          "group_version",
+          "slide_id",
+          "slide_index",
+          "slide_type",
+          "event"
+        ]
+      }
+    },
+    "securitySchemes": {
+      "customerToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Необязательный токен покупателя ИДБ (без токена — анонимная лента)"
+      }
+    }
+  }
+}

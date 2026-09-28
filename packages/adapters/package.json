@@ -1,0 +1,27 @@
+{
+  "name": "@idb-stories/adapters",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Интерфейсы интеграций с системами ИДБ и mock-реализации по умолчанию",
+  "type": "module",
+  "exports": {
+    ".": {
+      "@idb-stories/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1141.0",
+    "@aws-sdk/s3-request-presigner": "^3.1141.0",
+    "@idb-stories/schema": "workspace:*",
+    "jose": "^6.2.12"
+  }
+}

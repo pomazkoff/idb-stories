@@ -1,0 +1,35 @@
+{
+  "name": "@idb-stories/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Публичный API ленты и событий + admin API (разные порты, разные middleware)",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsx watch --conditions=@idb-stories/source src/server.ts",
+    "start": "node dist/server.js",
+    "storage:init": "tsx --conditions=@idb-stories/source src/scripts/storage-init.ts",
+    "token:customer": "tsx --conditions=@idb-stories/source src/scripts/issue-customer-token.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1141.0",
+    "@fastify/compress": "^9.2.0",
+    "@fastify/cookie": "^11.1.2",
+    "@fastify/cors": "^11.3.0",
+    "@fastify/formbody": "^9.0.0",
+    "@fastify/helmet": "^13.1.1",
+    "@fastify/rate-limit": "^11.2.0",
+    "@idb-stories/adapters": "workspace:*",
+    "@idb-stories/core": "workspace:*",
+    "@idb-stories/db": "workspace:*",
+    "@idb-stories/schema": "workspace:*",
+    "@prometheus-io/client": "^0.16.1",
+    "bullmq": "^5.81.5",
+    "fastify": "^5.12.5",
+    "fastify-plugin": "^6.0.0",
+    "ioredis": "^5.11.1",
+    "pino": "^10.3.1",
+    "zod": "^4.6.5"
+  }
+}

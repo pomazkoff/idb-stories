@@ -1,0 +1,36 @@
+{
+  "name": "@idb-stories/db",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Prisma-схема, миграции, seed и права ролей БД",
+  "type": "module",
+  "exports": {
+    ".": {
+      "@idb-stories/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "generated",
+    "prisma"
+  ],
+  "scripts": {
+    "generate": "prisma generate",
+    "build": "prisma generate && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "migrate:deploy": "prisma migrate deploy && tsx --conditions=@idb-stories/source src/scripts/apply-grants.ts",
+    "migrate:dev": "prisma migrate dev",
+    "migrate:diff": "prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --script",
+    "seed": "tsx --conditions=@idb-stories/source src/scripts/seed.ts"
+  },
+  "dependencies": {
+    "@idb-stories/adapters": "workspace:*",
+    "@idb-stories/schema": "workspace:*",
+    "@prisma/client": "6.19.3"
+  },
+  "devDependencies": {
+    "prisma": "6.19.3"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests", "docker:pinDigests"],
+  "timezone": "Europe/Moscow",
+  "schedule": ["before 9am on monday"],
+  "minimumReleaseAge": "3 days",
+  "vulnerabilityAlerts": { "enabled": true, "labels": ["security"], "schedule": ["at any time"] },
+  "packageRules": [
+    { "matchUpdateTypes": ["major"], "dependencyDashboardApproval": true },
+    { "matchPackageNames": ["prisma", "@prisma/client"], "groupName": "prisma" },
+    { "matchPackageNames": ["sharp"], "labels": ["media-worker", "security-sensitive"] },
+    {
+      "matchDepNames": ["FFMPEG_VERSION"],
+      "labels": ["media-worker", "security-sensitive"],
+      "description": "ffmpeg обновляется вручную вместе с FFMPEG_SHA256 в Dockerfile"
+    }
+  ]
+}

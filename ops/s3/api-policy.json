@@ -1,0 +1,8 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    { "Effect": "Allow", "Action": ["s3:PutObject", "s3:GetObject"], "Resource": ["arn:aws:s3:::stories-quarantine/*"] },
+    { "Effect": "Allow", "Action": ["s3:GetObject"], "Resource": ["arn:aws:s3:::stories-media/*"] },
+    { "Effect": "Allow", "Action": ["s3:PutObject"], "Resource": ["arn:aws:s3:::stories-public/*"] }
+  ]
+}

@@ -1,0 +1,25 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Supply chain (T10): не ставить версии младше суток, собирать нативные зависимости только из явного списка.
+minimumReleaseAge: 1440
+onlyBuiltDependencies:
+  - '@prisma/client'
+  - '@prisma/engines'
+  - prisma
+  - esbuild
+  - sharp
+  - embedded-postgres
+  - '@embedded-postgres/darwin-arm64'
+  - '@embedded-postgres/darwin-x64'
+  - '@embedded-postgres/linux-x64'
+  - '@embedded-postgres/linux-arm64'
+  - redis-memory-server
+  - ffmpeg-static
+  - ffprobe-static
+
+# Security overrides (pnpm audit --audit-level high в CI). Убирать, когда зависимость обновится сама.
+overrides:
+  # GHSA-ggr8-5vv4-36mx: транзитивно через prisma > @prisma/config (Prisma 6.19 фиксирует 7.1.5).
+  deepmerge-ts: ^8.0.2

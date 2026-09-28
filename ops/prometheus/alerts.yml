@@ -1,0 +1,79 @@
+# Алерты безопасности и доступности (раздел 10.9, 11). Метрики: API :9464, jobs :9465, media :9466 (/metrics).
+# Пороги N — стартовые, уточняются с ИБ по реальному трафику.
+groups:
+  - name: stories-security
+    rules:
+      - alert: StoriesAdminAuthFailuresSpike
+        expr: sum(rate(stories_http_request_duration_seconds_count{surface="admin",status=~"401|403"}[5m])) > 0.5
+        for: 5m
+        labels: { severity: warning, team: security }
+        annotations:
+          summary: Всплеск 401/403 в admin API
+          description: Возможный подбор сессии или попытки эскалации прав (T7). Проверьте security-лог (category=security).
+
+      - alert: StoriesMediaRejectionsPerUser
+        expr: sum by (uploader) (increase(stories_media_rejected_total[1h])) > 5
+        labels: { severity: warning, team: security }
+        annotations:
+          summary: Много отклонённых загрузок от одного пользователя
+          description: 'Пользователь {{ $labels.uploader }}: > 5 отказов за час — возможна попытка загрузки вредоносных файлов (T2).'
+
+      - alert: StoriesAllowlistOrRolesChanged
+        expr: sum by (type) (increase(stories_security_events_total{type=~"allowlist.changed|roles.changed|user.status_changed"}[5m])) > 0
+        labels: { severity: info, team: security }
+        annotations:
+          summary: 'Изменение {{ $labels.type }}'
+          description: Любое изменение allowlist, ролей или статуса пользователей — сверить с заявкой.
+
+      - alert: StoriesKillSwitchChanged
+        expr: increase(stories_security_events_total{type="kill_switch.changed"}[5m]) > 0
+        labels: { severity: critical, team: security }
+        annotations:
+          summary: Переключён kill switch ленты
+          description: Лента выключена или включена администратором. См. runbook docs/security.md.
+
+      - alert: StoriesPublicationOutsideBusinessHours
+        expr: sum(increase(stories_publications_total{business_hours="no",trigger!="schedule"}[5m])) > 0
+        labels: { severity: warning, team: security }
+        annotations:
+          summary: Публикация или снятие вне рабочего времени
+          description: Ручная публикация вне пн–пт 09–20 МСК — проверьте, кто и что опубликовал (журнал аудита).
+
+      - alert: StoriesFourEyesViolationAttempt
+        expr: increase(stories_security_events_total{type="four_eyes.violation"}[15m]) > 0
+        labels: { severity: warning, team: security }
+        annotations:
+          summary: Попытка самосогласования
+          description: Пользователь пытался согласовать собственную правку (T1).
+
+      - alert: StoriesCustomerAuthAdapterErrors
+        expr: sum(increase(stories_adapter_errors_total{adapter=~"customer-auth|segments"}[5m])) > 20
+        labels: { severity: warning, team: stories }
+        annotations:
+          summary: Ошибки адаптера авторизации покупателей
+          description: Персональная лента деградировала до общей. Проверьте IdP/сервис сегментов ИДБ.
+
+  - name: stories-availability
+    rules:
+      - alert: StoriesFeed5xxRatio
+        expr: |
+          sum(rate(stories_http_request_duration_seconds_count{surface="public",route="/v1/feed",status=~"5.."}[5m]))
+            / clamp_min(sum(rate(stories_http_request_duration_seconds_count{surface="public",route="/v1/feed"}[5m])), 1e-9) > 0.01
+        for: 5m
+        labels: { severity: critical, team: stories }
+        annotations:
+          summary: Доля 5xx на /v1/feed выше 1%
+          description: Клиенты скрывают ленту при ошибках; SLO 99.9%.
+
+      - alert: StoriesFeedLatencyP95
+        expr: histogram_quantile(0.95, sum by (le) (rate(stories_http_request_duration_seconds_bucket{surface="public",route="/v1/feed"}[5m]))) > 0.4
+        for: 10m
+        labels: { severity: warning, team: stories }
+        annotations:
+          summary: p95 /v1/feed выше 400 мс
+
+      - alert: StoriesRateLimitExceeded
+        expr: increase(stories_security_events_total{type="rate_limit.exceeded"}[5m]) > 100
+        labels: { severity: warning, team: stories }
+        annotations:
+          summary: Массовое превышение rate limit (возможен флуд, T8/T9)

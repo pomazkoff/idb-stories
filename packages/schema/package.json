@@ -1,0 +1,36 @@
+{
+  "name": "@idb-stories/schema",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Zod-схемы, типы, матрица прав, allowlist и генерация OpenAPI — единый источник правды",
+  "type": "module",
+  "exports": {
+    ".": {
+      "@idb-stories/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./allowlist": {
+      "@idb-stories/source": "./src/allowlist.ts",
+      "types": "./dist/allowlist.d.ts",
+      "default": "./dist/allowlist.js"
+    },
+    "./contracts": {
+      "@idb-stories/source": "./src/contracts/index.ts",
+      "types": "./dist/contracts/index.d.ts",
+      "default": "./dist/contracts/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "openapi:generate": "tsx --conditions=@idb-stories/source scripts/generate-openapi.ts",
+    "openapi:check": "tsx --conditions=@idb-stories/source scripts/generate-openapi.ts --check"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  }
+}

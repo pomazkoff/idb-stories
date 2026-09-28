@@ -1,0 +1,32 @@
+{
+  "name": "@idb-stories/web-player",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Веб-плеер сторис на чистом TypeScript (эталонная реализация docs/player-contract.md)",
+  "type": "module",
+  "exports": {
+    ".": {
+      "@idb-stories/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./styles.css": "./src/styles.css"
+  },
+  "files": [
+    "dist",
+    "src/styles.css"
+  ],
+  "sideEffects": [
+    "*.css"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node scripts/bundle.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@idb-stories/schema": "workspace:*"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

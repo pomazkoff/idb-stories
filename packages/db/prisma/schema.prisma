@@ -1,0 +1,319 @@
+// Модель данных сервиса сторис (раздел 4 ТЗ).
+// Миграции: prisma/migrations. Защиты уровня БД (append-only аудит, неизменяемые снимки,
+// один опубликованный снимок на группу) добавлены SQL-блоками в миграции — Prisma их не описывает.
+
+generator client {
+  provider      = "prisma-client-js"
+  output        = "../generated/client"
+  binaryTargets = ["native", "debian-openssl-3.0.x", "linux-arm64-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Placement {
+  home
+  catalog
+  product
+  cart
+}
+
+enum Platform {
+  ios
+  android
+  web
+}
+
+enum GroupStatus {
+  draft
+  in_review
+  approved
+  published
+  archived
+  rejected
+}
+
+// Расширяемый: новые типы слайдов добавляются миграцией ALTER TYPE ... ADD VALUE.
+enum SlideType {
+  image
+  video
+  product
+}
+
+enum MediaKind {
+  image
+  video
+}
+
+enum MediaPurpose {
+  slide
+  cover
+}
+
+enum MediaStatus {
+  uploaded
+  processing
+  ready
+  rejected
+}
+
+enum SnapshotState {
+  approved
+  published
+  superseded
+  archived
+}
+
+enum RoleName {
+  editor
+  publisher
+  analyst
+  admin
+}
+
+/// Сотрудник ИДБ. Создаётся при первом входе через SSO; паролей нет.
+model AdminUser {
+  id          String     @id @default(uuid()) @db.Uuid
+  /// subject из IdP
+  subject     String     @unique
+  email       String
+  name        String
+  disabled    Boolean    @default(false)
+  lastLoginAt DateTime?  @map("last_login_at") @db.Timestamptz(3)
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  roles       UserRole[]
+
+  @@map("admin_user")
+}
+
+model Role {
+  name        RoleName   @id
+  description String
+  users       UserRole[]
+
+  @@map("role")
+}
+
+model UserRole {
+  userId      String    @map("user_id") @db.Uuid
+  role        RoleName
+  grantedById String?   @map("granted_by") @db.Uuid
+  grantedAt   DateTime  @default(now()) @map("granted_at") @db.Timestamptz(3)
+  user        AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleRef     Role      @relation(fields: [role], references: [name])
+
+  @@id([userId, role])
+  @@map("user_role")
+}
+
+/// Кружок в ленте. Строка — редактируемая рабочая копия; покупатели видят только снимки.
+model StoryGroup {
+  id                   String              @id @default(uuid()) @db.Uuid
+  title                String              @db.VarChar(40)
+  coverAssetId         String?             @map("cover_asset_id") @db.Uuid
+  placement            Placement
+  priority             Int                 @default(0)
+  startAt              DateTime            @map("start_at") @db.Timestamptz(3)
+  endAt                DateTime            @map("end_at") @db.Timestamptz(3)
+  platforms            Platform[]
+  minAppVersionIos     String?             @map("min_app_version_ios")
+  minAppVersionAndroid String?             @map("min_app_version_android")
+  segmentIds           String[]            @map("segment_ids")
+  status               GroupStatus         @default(draft)
+  /// Растёт при каждой правке группы или слайдов (оптимистическая блокировка, что именно согласовано).
+  revision             Int                 @default(1)
+  lastEditedById       String              @map("last_edited_by") @db.Uuid
+  /// Все, кто правил рабочую копию с последнего согласования: никто из них не может её согласовать.
+  editorsSinceApproval String[]            @map("editors_since_approval") @db.Uuid
+  submittedAt          DateTime?           @map("submitted_at") @db.Timestamptz(3)
+  submittedById        String?             @map("submitted_by") @db.Uuid
+  reviewedAt           DateTime?           @map("reviewed_at") @db.Timestamptz(3)
+  reviewedById         String?             @map("reviewed_by") @db.Uuid
+  reviewComment        String?             @map("review_comment")
+  createdById          String              @map("created_by") @db.Uuid
+  updatedById          String              @map("updated_by") @db.Uuid
+  createdAt            DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  cover                MediaAsset?         @relation("GroupCover", fields: [coverAssetId], references: [id])
+  slides               Slide[]
+  snapshots            PublishedSnapshot[]
+
+  @@index([status])
+  @@index([placement, startAt])
+  @@index([updatedAt])
+  @@map("story_group")
+}
+
+model Slide {
+  id           String      @id @default(uuid()) @db.Uuid
+  groupId      String      @map("group_id") @db.Uuid
+  position     Int
+  type         SlideType
+  durationMs   Int         @map("duration_ms")
+  mediaAssetId String?     @map("media_asset_id") @db.Uuid
+  /// Текстовые блоки (валидируются zod-схемой SlideElement)
+  elements     Json        @default("[]")
+  /// CTA (валидируется zod-схемой Cta и allowlist)
+  cta          Json?
+  productSkus  String[]    @map("product_skus")
+  createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+  group        StoryGroup  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  media        MediaAsset? @relation("SlideMedia", fields: [mediaAssetId], references: [id])
+
+  @@index([groupId, position])
+  @@map("slide")
+}
+
+model MediaAsset {
+  id                  String       @id @default(uuid()) @db.Uuid
+  kind                MediaKind
+  purpose             MediaPurpose
+  status              MediaStatus  @default(uploaded)
+  rejectReason        String?      @map("reject_reason")
+  declaredContentType String       @map("declared_content_type")
+  declaredSize        Int          @map("declared_size")
+  /// Ключ оригинала в quarantine bucket
+  originalKey         String       @unique @map("original_key")
+  detectedMime        String?      @map("detected_mime")
+  /// Непредсказуемый префикс результатов (sha256(content hash + соль)) в bucket media и public
+  storageKey          String?      @map("storage_key")
+  /// Ключи вариантов, размеры, битрейты (см. MediaVariants в @idb-stories/core)
+  variants            Json?
+  sha256              String?
+  size                Int?
+  width               Int?
+  height              Int?
+  durationMs          Int?         @map("duration_ms")
+  uploadedById        String       @map("uploaded_by") @db.Uuid
+  processingStartedAt DateTime?    @map("processing_started_at") @db.Timestamptz(3)
+  processedAt         DateTime?    @map("processed_at") @db.Timestamptz(3)
+  createdAt           DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  slides              Slide[]      @relation("SlideMedia")
+  coverOf             StoryGroup[] @relation("GroupCover")
+
+  @@index([uploadedById, createdAt])
+  @@index([status, createdAt])
+  @@map("media_asset")
+}
+
+/// Неизменяемый снимок группы на момент согласования. Лента отдаётся только из снимков.
+/// Меняться могут только поля жизненного цикла (state и временные метки) — это проверяет триггер.
+model PublishedSnapshot {
+  id                   String            @id @default(uuid()) @db.Uuid
+  groupId              String            @map("group_id") @db.Uuid
+  version              Int
+  state                SnapshotState     @default(approved)
+  /// Группа в формате публичного API (FeedGroup)
+  payload              Json
+  /// Нормализованная рабочая копия на момент согласования (для diff в очереди согласования)
+  source               Json
+  placement            Placement
+  priority             Int
+  startAt              DateTime          @map("start_at") @db.Timestamptz(3)
+  endAt                DateTime          @map("end_at") @db.Timestamptz(3)
+  platforms            Platform[]
+  minAppVersionIos     String?           @map("min_app_version_ios")
+  minAppVersionAndroid String?           @map("min_app_version_android")
+  segmentIds           String[]          @map("segment_ids")
+  mediaAssetIds        String[]          @map("media_asset_ids") @db.Uuid
+  sourceRevision       Int               @map("source_revision")
+  approvedById         String            @map("approved_by") @db.Uuid
+  approvedAt           DateTime          @map("approved_at") @db.Timestamptz(3)
+  publishedAt          DateTime?         @map("published_at") @db.Timestamptz(3)
+  publishedById        String?           @map("published_by") @db.Uuid
+  archivedAt           DateTime?         @map("archived_at") @db.Timestamptz(3)
+  archivedById         String?           @map("archived_by") @db.Uuid
+  supersededAt         DateTime?         @map("superseded_at") @db.Timestamptz(3)
+  group                StoryGroup        @relation(fields: [groupId], references: [id], onDelete: Restrict)
+
+  @@unique([groupId, version])
+  @@index([state, startAt])
+  @@index([state, endAt])
+  @@map("published_snapshot")
+}
+
+/// Справочник сегментов ИДБ (синхронизация — [ИНТЕГРАЦИЯ]).
+model Segment {
+  id       String   @id
+  name     String
+  syncedAt DateTime @default(now()) @map("synced_at") @db.Timestamptz(3)
+
+  @@map("segment")
+}
+
+/// Append-only: у роли приложения нет UPDATE/DELETE, плюс триггер запрещает изменения всем.
+model AuditLog {
+  id         BigInt   @id @default(autoincrement())
+  ts         DateTime @default(now()) @db.Timestamptz(3)
+  /// null — системное действие (планировщик)
+  actorId    String?  @map("actor_id") @db.Uuid
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String?  @map("entity_id")
+  diff       Json?
+  ip         String?
+  userAgent  String?  @map("user_agent")
+  requestId  String?  @map("request_id")
+
+  @@index([ts])
+  @@index([entityType, entityId, ts])
+  @@index([actorId, ts])
+  @@map("audit_log")
+}
+
+model Setting {
+  key         String   @id
+  value       Json
+  updatedById String?  @map("updated_by") @db.Uuid
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("setting")
+}
+
+/// Сырые события плееров. Хранятся 30 дней (раздел 10.7). Без идентификаторов пользователя.
+model StoryEventRaw {
+  eventId      String    @id @map("event_id") @db.Uuid
+  event        String
+  ts           DateTime  @db.Timestamptz(3)
+  receivedAt   DateTime  @default(now()) @map("received_at") @db.Timestamptz(3)
+  platform     Platform
+  placement    Placement
+  appVersion   String    @map("app_version")
+  sessionId    String    @map("session_id")
+  groupId      String?   @map("group_id") @db.Uuid
+  groupVersion Int?      @map("group_version")
+  slideId      String?   @map("slide_id") @db.Uuid
+  payload      Json
+
+  @@index([receivedAt])
+  @@index([groupId, ts])
+  @@map("story_event")
+}
+
+/// Дневные агрегаты для статистики в админке. Хранятся 2 года.
+/// slideId = '' — строка уровня группы (показы кружка, открытия, закрытия).
+model StatDaily {
+  day            DateTime @db.Date
+  groupId        String   @map("group_id") @db.Uuid
+  groupVersion   Int      @map("group_version")
+  slideId        String   @default("") @map("slide_id")
+  platform       Platform
+  impressions    Int      @default(0)
+  opens          Int      @default(0)
+  slideViews     Int      @default(0) @map("slide_views")
+  slideCompletes Int      @default(0) @map("slide_completes")
+  ctaClicks      Int      @default(0) @map("cta_clicks")
+  productClicks  Int      @default(0) @map("product_clicks")
+  addToCart      Int      @default(0) @map("add_to_cart")
+  closes         Int      @default(0)
+  mediaErrors    Int      @default(0) @map("media_errors")
+
+  @@id([day, groupId, groupVersion, slideId, platform])
+  @@index([groupId, day])
+  @@map("stat_daily")
+}

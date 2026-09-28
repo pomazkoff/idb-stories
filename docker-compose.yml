@@ -1,0 +1,203 @@
+# Локальное окружение: `docker compose up --build` поднимает всё — Postgres, Redis, S3, миграции,
+# seed, публичный и admin API, фоновые задачи, изолированный медиа-воркер и админку.
+#   Админка:        http://localhost:8082   (вход через mock-IdP, только dev)
+#   Публичный API:  http://localhost:8080/v1/feed?placement=home  (заголовок X-Platform: web)
+#   S3 / «CDN»:     http://localhost:9000
+# Секреты ниже — только для локальной разработки.
+
+name: idb-stories
+
+x-app-env: &app-env
+  NODE_ENV: development
+  LOG_LEVEL: info
+  REDIS_URL: redis://:dev-redis-password@redis:6379
+  REDIS_PREFIX: 'stories:'
+  S3_ENDPOINT: http://s3:9000
+  S3_PUBLIC_ENDPOINT: http://localhost:9000
+  S3_REGION: us-east-1
+  S3_ACCESS_KEY_ID: dev-s3-access-key
+  S3_SECRET_ACCESS_KEY: dev-s3-secret-key-change-me
+  S3_FORCE_PATH_STYLE: 'true'
+  CDN_BASE_URL: http://localhost:9000/stories-public
+
+x-hardened: &hardened
+  read_only: true
+  tmpfs:
+    - /tmp:size=64m
+  cap_drop: [ALL]
+  security_opt:
+    - no-new-privileges:true
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: dev-postgres-password
+      STORIES_OWNER_PASSWORD: dev-owner-password
+      STORIES_APP_PASSWORD: dev-app-password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./ops/postgres/init.sh:/docker-entrypoint-initdb.d/10-init.sh:ro
+    ports: ['127.0.0.1:5432:5432']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d stories']
+      interval: 3s
+      retries: 20
+    networks: [backend]
+
+  redis:
+    image: redis:7.4-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+    command: ['redis-server', '--appendonly', 'yes', '--requirepass', 'dev-redis-password']
+    healthcheck:
+      test: ['CMD', 'redis-cli', '-a', 'dev-redis-password', '--no-auth-warning', 'ping']
+      interval: 3s
+      retries: 20
+    networks: [backend, media]
+
+  # S3-совместимое хранилище. MinIO больше не публикует образы и бинарники (см. DECISIONS.md),
+  # поэтому локально — RustFS (MinIO-совместимый, Apache-2.0). В проде — хранилище в РФ-контуре.
+  s3:
+    image: rustfs/rustfs:1.0.0@sha256:8cc9801755448b71a786705ce76692c77e14936cccd87cf2fc31842e58f4d1ff
+    environment:
+      RUSTFS_ACCESS_KEY: dev-s3-access-key
+      RUSTFS_SECRET_KEY: dev-s3-secret-key-change-me
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ENABLE: 'false'
+      # Один том без проверки топологии дисков — только для локальной разработки.
+      RUSTFS_UNSAFE_BYPASS_DISK_CHECK: 'true'
+    volumes:
+      - s3data:/data
+    ports: ['127.0.0.1:9000:9000']
+    depends_on:
+      s3-permissions: { condition: service_completed_successfully }
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://127.0.0.1:9000/health']
+      interval: 3s
+      retries: 30
+      start_period: 10s
+    networks: [backend, media]
+
+  # RustFS работает от uid 10001: named volume нужно отдать этому пользователю.
+  s3-permissions:
+    image: alpine:3.22@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8
+    command: ['chown', '-R', '10001:10001', '/data']
+    volumes:
+      - s3data:/data
+    restart: 'no'
+
+  init:
+    build: { context: ., target: tools }
+    environment:
+      <<: *app-env
+      DATABASE_URL: postgresql://stories_owner:dev-owner-password@postgres:5432/stories
+      DB_APP_ROLE: stories_app
+      ADMIN_ORIGIN: http://localhost:8082
+    depends_on:
+      postgres: { condition: service_healthy }
+      s3: { condition: service_healthy }
+    restart: 'no'
+    networks: [backend]
+
+  api-public:
+    build: { context: ., target: api }
+    <<: *hardened
+    environment:
+      <<: *app-env
+      API_SURFACES: public
+      DATABASE_URL: postgresql://stories_app:dev-app-password@postgres:5432/stories
+      PUBLIC_CORS_ORIGINS: http://localhost:8082,http://localhost:5173
+      ADMIN_ORIGIN: http://localhost:8082
+      SEGMENTS_CACHE_SALT: dev-segments-salt-0123456789
+      CUSTOMER_AUTH_PROVIDER: mock
+      CUSTOMER_AUTH_MOCK_SECRET: dev-customer-token-secret-0123456789ab
+    ports: ['127.0.0.1:8080:8080']
+    depends_on:
+      init: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:8080/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      retries: 20
+    networks: [backend]
+
+  api-admin:
+    build: { context: ., target: api }
+    <<: *hardened
+    environment:
+      <<: *app-env
+      API_SURFACES: admin
+      DATABASE_URL: postgresql://stories_app:dev-app-password@postgres:5432/stories
+      ADMIN_ORIGIN: http://localhost:8082
+      # Локально по http: браузеры принимают Secure-cookie только для localhost. В проде — только true.
+      ADMIN_COOKIE_SECURE: 'false'
+      SSO_PROVIDER: mock
+      SEGMENTS_CACHE_SALT: dev-segments-salt-0123456789
+      TRUST_PROXY: 'true'
+    depends_on:
+      init: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    networks: [backend]
+
+  jobs:
+    build: { context: ., target: jobs }
+    <<: *hardened
+    environment:
+      <<: *app-env
+      DATABASE_URL: postgresql://stories_app:dev-app-password@postgres:5432/stories
+    depends_on:
+      init: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    networks: [backend]
+
+  # Изолированный медиа-воркер (раздел 10.5): сеть `media` без выхода наружу — видны только Redis и S3.
+  # Non-root, read-only FS, запись только в tmpfs, capabilities сброшены, лимиты CPU/памяти/процессов.
+  media-worker:
+    build: { context: ., target: media }
+    <<: *hardened
+    tmpfs:
+      - /tmp:size=1500m,mode=1777
+    environment:
+      <<: *app-env
+      MEDIA_CONCURRENCY: '1'
+      MEDIA_TIMEOUT_SEC: '300'
+    mem_limit: 2g
+    cpus: 2
+    pids_limit: 128
+    depends_on:
+      redis: { condition: service_healthy }
+      init: { condition: service_completed_successfully }
+    networks: [media]
+
+  admin:
+    build: { context: ., target: admin }
+    <<: *hardened
+    tmpfs:
+      - /tmp:size=16m
+      - /etc/nginx/conf.d:size=1m,uid=101,gid=101
+    environment:
+      ADMIN_API_UPSTREAM: api-admin:8081
+      CDN_ORIGIN: http://localhost:9000
+      S3_PUBLIC_ORIGIN: http://localhost:9000
+    ports: ['127.0.0.1:8082:8080']
+    depends_on: [api-admin]
+    networks: [backend]
+
+networks:
+  backend: {}
+  media:
+    internal: true
+
+volumes:
+  pgdata: {}
+  s3data: {}

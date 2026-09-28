@@ -1,0 +1,31 @@
+{
+  "name": "@idb-stories/worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Изолированный медиа-воркер (ffmpeg/libvips) и фоновые задачи (планировщик, события, ретеншн)",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "dev:media": "tsx watch --conditions=@idb-stories/source src/media/main.ts",
+    "dev:jobs": "tsx watch --conditions=@idb-stories/source src/jobs/main.ts",
+    "start:media": "node dist/media/main.js",
+    "start:jobs": "node dist/jobs/main.js"
+  },
+  "dependencies": {
+    "@idb-stories/adapters": "workspace:*",
+    "@idb-stories/core": "workspace:*",
+    "@idb-stories/db": "workspace:*",
+    "@idb-stories/schema": "workspace:*",
+    "@prometheus-io/client": "^0.16.1",
+    "bullmq": "^5.81.5",
+    "ioredis": "^5.11.1",
+    "pino": "^10.3.1",
+    "sharp": "^0.35.4",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "ffmpeg-static": "^5.3.0",
+    "ffprobe-static": "^3.1.0"
+  }
+}

@@ -1,0 +1,17 @@
+# gitleaks (раздел 10.10, T11). Разрешены только заведомо тестовые значения локального окружения.
+title = "idb-stories"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Dev-значения docker compose и тестов — не секреты"
+regexes = [
+  '''dev-[a-z0-9-]*(password|secret|key)[a-z0-9-]*''',
+  '''test-customer-secret-0123456789abcdef''',
+  '''(owner|app)_test_pw''',
+]
+paths = [
+  '''pnpm-lock\.yaml''',
+  '''docs/openapi/.*\.json''',
+]

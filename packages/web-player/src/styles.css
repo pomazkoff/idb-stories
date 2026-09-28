@@ -1,0 +1,589 @@
+/*
+ * IDB Stories — веб-плеер. Подключается хостом через <link rel="stylesheet">.
+ * Все классы с префиксом idbs-. Цвета и размеры настраиваются CSS-переменными на контейнере
+ * или на :root.
+ */
+
+:root {
+  --idbs-font: inherit;
+  --idbs-accent: #111;
+  --idbs-accent-contrast: #fff;
+  --idbs-ring: linear-gradient(45deg, #111 0%, #b08d57 50%, #111 100%);
+  --idbs-ring-viewed: #d0d0d0;
+  --idbs-circle-size: 68px;
+  --idbs-feed-gap: 12px;
+  --idbs-title-color: inherit;
+  --idbs-overlay-z: 2147483000;
+  --idbs-overlay-bg: #000;
+}
+
+.idbs-scroll-lock,
+.idbs-scroll-lock body {
+  overflow: hidden !important;
+}
+
+.idbs-sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+/* ------------------------------------------------------------------------- */
+/* Лента кружков                                                             */
+/* ------------------------------------------------------------------------- */
+
+.idbs-feed {
+  display: flex;
+  gap: var(--idbs-feed-gap);
+  margin: 0;
+  padding: 8px 16px;
+  list-style: none;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  font-family: var(--idbs-font);
+  -webkit-overflow-scrolling: touch;
+}
+
+.idbs-feed::-webkit-scrollbar {
+  display: none;
+}
+
+.idbs-feed__item {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+}
+
+.idbs-circle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: calc(var(--idbs-circle-size) + 12px);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--idbs-title-color);
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.idbs-circle__ring {
+  display: block;
+  box-sizing: border-box;
+  width: calc(var(--idbs-circle-size) + 6px);
+  height: calc(var(--idbs-circle-size) + 6px);
+  padding: 3px;
+  border-radius: 50%;
+  background: var(--idbs-ring);
+}
+
+.idbs-circle__img {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #eee;
+  object-fit: cover;
+}
+
+.idbs-circle__title {
+  display: -webkit-box;
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.25;
+  text-align: center;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.idbs-circle--viewed .idbs-circle__ring {
+  background: var(--idbs-ring-viewed);
+}
+
+.idbs-circle--viewed {
+  opacity: 0.6;
+}
+
+.idbs-circle:focus-visible {
+  outline: 2px solid var(--idbs-accent);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* ------------------------------------------------------------------------- */
+/* Плеер                                                                     */
+/* ------------------------------------------------------------------------- */
+
+.idbs-viewer {
+  box-sizing: border-box;
+  color: #fff;
+  font-family: var(--idbs-font);
+  -webkit-font-smoothing: antialiased;
+}
+
+.idbs-viewer *,
+.idbs-viewer *::before,
+.idbs-viewer *::after {
+  box-sizing: border-box;
+}
+
+.idbs-viewer--overlay:focus {
+  outline: none;
+}
+
+.idbs-viewer--inline:focus {
+  outline: none;
+}
+
+.idbs-viewer--inline:focus-visible {
+  outline: 2px solid var(--idbs-accent);
+  outline-offset: 2px;
+}
+
+.idbs-viewer--overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--idbs-overlay-z);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--idbs-overlay-bg);
+}
+
+.idbs-viewer--inline {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--idbs-overlay-bg);
+}
+
+.idbs-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.idbs-viewer--overlay .idbs-stage {
+  width: min(100vw, 56.25vh);
+  height: min(100vh, 177.78vw);
+  height: min(100dvh, 177.78vw);
+}
+
+@media (min-width: 600px) {
+  .idbs-viewer--overlay .idbs-stage {
+    border-radius: 12px;
+  }
+}
+
+.idbs-stage[hidden] {
+  display: none;
+}
+
+.idbs-slot,
+.idbs-slide,
+.idbs-media {
+  position: absolute;
+  inset: 0;
+}
+
+.idbs-media__img,
+.idbs-media__video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #111;
+  pointer-events: none;
+}
+
+.idbs-shade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(to bottom, rgb(0 0 0 / 45%) 0, rgb(0 0 0 / 0%) 22%),
+    linear-gradient(to top, rgb(0 0 0 / 55%) 0, rgb(0 0 0 / 0%) 35%);
+}
+
+/* Хром: прогресс и шапка */
+
+.idbs-chrome {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 3;
+  padding: 8px 8px 0;
+  padding-top: max(8px, env(safe-area-inset-top));
+}
+
+.idbs-chrome {
+  transition: opacity 0.2s;
+}
+
+/* Удержание: прячем хром, как в нативных сторис. */
+.idbs-viewer--holding .idbs-chrome {
+  opacity: 0;
+}
+
+.idbs-progress {
+  display: flex;
+  gap: 4px;
+}
+
+.idbs-progress__seg {
+  flex: 1 1 0;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 1px;
+  background: rgb(255 255 255 / 35%);
+}
+
+.idbs-progress__seg[hidden] {
+  display: none;
+}
+
+.idbs-progress__fill {
+  width: 100%;
+  height: 100%;
+  background: #fff;
+  transform: scaleX(0);
+  transform-origin: left center;
+  will-change: transform;
+}
+
+.idbs-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin-top: 6px;
+}
+
+.idbs-header__avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+
+.idbs-header__avatar[hidden] {
+  display: none;
+}
+
+.idbs-header__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 40%);
+}
+
+.idbs-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.idbs-btn[hidden] {
+  display: none;
+}
+
+.idbs-btn:focus-visible,
+.idbs-cta:focus-visible,
+.idbs-product__main:focus-visible,
+.idbs-product__cart:focus-visible,
+.idbs-end__replay:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.idbs-icon {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 40%));
+}
+
+.idbs-icon--play path,
+.idbs-icon--sound path:first-child,
+.idbs-icon--muted path:first-child {
+  fill: currentColor;
+}
+
+/* Слои текста */
+
+.idbs-layer {
+  position: absolute;
+  right: 0;
+  left: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 16px;
+  pointer-events: none;
+}
+
+.idbs-layer > * {
+  pointer-events: auto;
+}
+
+.idbs-layer--top {
+  top: 72px;
+  padding-top: env(safe-area-inset-top);
+}
+
+.idbs-layer--center {
+  top: 50%;
+  transform: translateY(-50%);
+  max-height: calc(100% - 200px);
+}
+
+.idbs-layer--bottom {
+  bottom: 0;
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+}
+
+.idbs-text {
+  margin: 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 50%);
+  pointer-events: none;
+}
+
+.idbs-text--title {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.idbs-text--body {
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.idbs-text--caption {
+  font-size: 13px;
+  line-height: 1.35;
+  opacity: 0.9;
+}
+
+.idbs-cta {
+  align-self: center;
+  min-width: 160px;
+  max-width: 100%;
+  min-height: 44px;
+  margin-top: 8px;
+  padding: 12px 24px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 24px;
+  background: #fff;
+  color: #111;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+/* Товары */
+
+.idbs-products {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.idbs-product {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #fff;
+  color: #111;
+}
+
+.idbs-product__main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.idbs-product__img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+}
+
+.idbs-product__name {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.idbs-product__price {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.idbs-product__cart {
+  min-height: 36px;
+  margin: 0 8px 8px;
+  border: 0;
+  border-radius: 18px;
+  background: var(--idbs-accent);
+  color: var(--idbs-accent-contrast);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.idbs-product__cart:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Загрузка */
+
+.idbs-spinner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 4;
+  display: none;
+  width: 36px;
+  height: 36px;
+  margin: -18px 0 0 -18px;
+  border: 3px solid rgb(255 255 255 / 30%);
+  border-top-color: #fff;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: idbs-spin 0.8s linear infinite;
+}
+
+.idbs-viewer--loading .idbs-spinner {
+  display: block;
+}
+
+@keyframes idbs-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Конец предпросмотра и пустое состояние */
+
+.idbs-end,
+.idbs-preview-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  width: 100%;
+  height: 100%;
+  padding: 24px;
+  text-align: center;
+}
+
+.idbs-end[hidden] {
+  display: none;
+}
+
+.idbs-end__text {
+  margin: 0;
+  font-size: 16px;
+}
+
+.idbs-end__replay {
+  min-height: 44px;
+  padding: 10px 24px;
+  border: 0;
+  border-radius: 22px;
+  background: #fff;
+  color: #111;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.idbs-preview-empty {
+  color: #666;
+  font-family: var(--idbs-font);
+  font-size: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .idbs-progress__fill {
+    transition: none !important;
+  }
+
+  .idbs-spinner {
+    animation-duration: 2s;
+  }
+
+  .idbs-feed {
+    scroll-behavior: auto;
+  }
+}

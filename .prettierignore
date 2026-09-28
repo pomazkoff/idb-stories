@@ -1,0 +1,8 @@
+pnpm-lock.yaml
+**/dist
+**/generated
+**/coverage
+docs/openapi
+**/playwright-report
+**/test-results
+packages/db/prisma/migrations

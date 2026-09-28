@@ -86,6 +86,9 @@ const worker = new Worker<MediaProcessJob>(
   },
 );
 
+results.on('error', (err) => logger.error({ err }, 'Ошибка очереди результатов'));
+worker.on('error', (err) => logger.error({ err }, 'Ошибка воркера очереди'));
+
 // Исчерпаны попытки из-за инфраструктурной ошибки: сообщаем, чтобы файл не завис в processing.
 worker.on('failed', (job, err) => {
   logger.error({ err, assetId: job?.data.assetId }, 'Ошибка обработки медиа');

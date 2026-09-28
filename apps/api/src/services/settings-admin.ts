@@ -5,6 +5,7 @@ import {
   readFeedEnabled,
   writeAudit,
   type AuditContext,
+  securityContext,
 } from '@idb-stories/core';
 import { validateAllowlist, type CtaAllowlist, type SettingsDto } from '@idb-stories/schema';
 import type { AppDeps } from '../context.js';
@@ -53,9 +54,7 @@ export class SettingsAdminService {
       });
     });
     this.deps.security.emit('allowlist.changed', {
-      actorId: actor.id,
-      ip: audit.ip ?? null,
-      requestId: audit.requestId ?? null,
+      ...securityContext(audit),
       details: { allowlist: checked.allowlist },
     });
     return this.get();
@@ -85,9 +84,7 @@ export class SettingsAdminService {
     });
     await invalidateFeed(this.deps.publishing, enabled ? 'kill switch off' : 'kill switch on');
     this.deps.security.emit('kill_switch.changed', {
-      actorId: actor.id,
-      ip: audit.ip ?? null,
-      requestId: audit.requestId ?? null,
+      ...securityContext(audit),
       details: { feedEnabled: enabled },
     });
     return this.get();

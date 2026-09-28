@@ -4,6 +4,7 @@ import {
   readAllowlist,
   writeAudit,
   type AuditContext,
+  securityContext,
 } from '@idb-stories/core';
 import { Prisma, type Slide, type StoryGroup } from '@idb-stories/db';
 import {
@@ -489,9 +490,7 @@ export class GroupsService {
       const res = checkCta(cta.type, cta.value, list);
       if (!res.ok) {
         this.deps.security.emit('cta.rejected', {
-          actorId: audit.actorId,
-          ip: audit.ip ?? null,
-          requestId: audit.requestId ?? null,
+          ...securityContext(audit),
           details: {
             stage: 'save',
             groupId,

@@ -147,7 +147,8 @@ export function registerRoutes(
           audit: auditContext(req),
         } as HandlerContext<RouteContract>;
         const result = await handler(ctx);
-        if (result === reply || reply.sent) return reply;
+        // Обработчик сам отправил ответ (redirect, готовое тело ленты): await reply ждёт завершения отправки.
+        if (reply.sent) return reply;
         const status = reply.statusCode === 200 ? defaultStatus : reply.statusCode;
         if (status === 204 || result === undefined) return reply.code(status).send();
         if (deps.config.validateResponses) {

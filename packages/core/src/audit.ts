@@ -10,6 +10,15 @@ export interface AuditContext {
 
 export const SYSTEM_CONTEXT: AuditContext = { actorId: null };
 
+/** Кто и откуда — для события безопасности в том же контексте, что и запись аудита. */
+export function securityContext(ctx: AuditContext): {
+  actorId: string | null;
+  ip: string | null;
+  requestId: string | null;
+} {
+  return { actorId: ctx.actorId, ip: ctx.ip ?? null, requestId: ctx.requestId ?? null };
+}
+
 type Db = Pick<Prisma.TransactionClient, 'auditLog'>;
 
 export interface AuditEntry {

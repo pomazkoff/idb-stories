@@ -57,7 +57,7 @@ jobs:
         with: { node-version: '${{ env.NODE_VERSION }}' }
       - run: corepack enable && pnpm install --frozen-lockfile
       - run: pnpm db:generate
-      - name: Тесты и покрытие критичных модулей (≥ 90%)
+      - name: Тесты и покрытие каждого критичного модуля (≥ 90%, ветвления ≥ 85%)
         run: pnpm test:coverage
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()

@@ -1,4 +1,4 @@
-import { writeAudit, type AuditContext } from '@idb-stories/core';
+import { writeAudit, type AuditContext, securityContext } from '@idb-stories/core';
 import type { Role } from '@idb-stories/schema';
 import type { SessionStore } from '../auth/session.js';
 import type { AppDeps } from '../context.js';
@@ -49,9 +49,7 @@ export class UsersService {
       return tx.adminUser.findUniqueOrThrow({ where: { id }, include: { roles: true } });
     });
     this.deps.security.emit('roles.changed', {
-      actorId: actor.id,
-      ip: audit.ip ?? null,
-      requestId: audit.requestId ?? null,
+      ...securityContext(audit),
       details: { userId: id, roles },
     });
     return toUserDto(user);
@@ -79,9 +77,7 @@ export class UsersService {
     });
     if (disabled) await this.sessions.destroyAllForUser(id);
     this.deps.security.emit('user.status_changed', {
-      actorId: actor.id,
-      ip: audit.ip ?? null,
-      requestId: audit.requestId ?? null,
+      ...securityContext(audit),
       details: { userId: id, disabled },
     });
     return toUserDto(user);

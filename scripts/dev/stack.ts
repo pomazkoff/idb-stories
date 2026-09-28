@@ -73,6 +73,7 @@ async function main() {
     password: 'postgres',
     port: PG_PORT,
     persistent: true,
+    initdbFlags: ['--encoding=UTF8', '--locale=C'],
     onLog: () => {},
   });
   try {

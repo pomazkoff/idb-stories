@@ -84,7 +84,11 @@ interface Media {
   previews: { url: string }[];
 }
 
-export async function upload(s: Session, data: Buffer, purpose: 'slide' | 'cover'): Promise<string> {
+export async function upload(
+  s: Session,
+  data: Buffer,
+  purpose: 'slide' | 'cover',
+): Promise<string> {
   const { asset, upload: up } = await api<Upload>(s, 'POST', '/media/upload-url', {
     kind: 'image',
     purpose,
@@ -116,4 +120,3 @@ export async function upload(s: Session, data: Buffer, purpose: 'slide' | 'cover
   }
   throw new Error('медиа не обработано за 30 секунд');
 }
-

@@ -42,10 +42,13 @@ const LIVE_SET_MAX_AGE_MS = 60_000;
 const LIVE_SET_FALLBACK_MS = 5_000;
 
 export function segmentsHash(segments: readonly string[]): string {
-  return createHash('sha256')
-    .update([...new Set(segments)].sort().join('\n'))
-    .digest('hex')
-    .slice(0, 32);
+  return (
+    createHash('sha256')
+      // JSON, а не join: ID сегментов приходят из внешней системы и могут содержать разделитель.
+      .update(JSON.stringify([...new Set(segments)].sort()))
+      .digest('hex')
+      .slice(0, 32)
+  );
 }
 
 export function emptyFeed(now: number, ttlSec: number = LIMITS.feedTtlMaxSec): string {
@@ -65,7 +68,12 @@ export function emptyFeed(now: number, ttlSec: number = LIMITS.feedTtlMaxSec): s
  */
 export class FeedService {
   private live: { gen: string | null; loadedAt: number; snapshots: LiveSnapshot[] } | null = null;
-  private loading: Promise<LiveSnapshot[]> | null = null;
+  /** Загрузка из БД в процессе и поколение, для которого её начали. */
+  private loading: { gen: string | null; seq: number; promise: Promise<LiveSnapshot[]> } | null =
+    null;
+  /** Порядковые номера загрузок: более старая загрузка не перезаписывает результат более новой. */
+  private loadSeq = 0;
+  private appliedSeq = 0;
   private readonly now: () => number;
 
   constructor(private readonly deps: FeedServiceDeps) {
@@ -135,12 +143,25 @@ export class FeedService {
       if (gen === null && age < LIVE_SET_FALLBACK_MS)
         return { gen: null, snapshots: live.snapshots };
     }
-    // single-flight: параллельные запросы ждут одну загрузку из БД
-    this.loading ??= this.loadLiveSnapshots(now).finally(() => {
-      this.loading = null;
-    });
-    const snapshots = await this.loading;
-    this.live = { gen, loadedAt: now, snapshots };
+    // single-flight: параллельные запросы одного поколения ждут одну загрузку из БД.
+    // К загрузке, начатой для другого поколения, не присоединяемся: она могла прочитать БД
+    // до публикации или снятия, и её результат нельзя сохранять под новым поколением.
+    let load = this.loading;
+    if (!load || load.gen !== gen) {
+      const current = { gen, seq: ++this.loadSeq, promise: this.loadLiveSnapshots(now) };
+      this.loading = current;
+      current.promise
+        .finally(() => {
+          if (this.loading === current) this.loading = null;
+        })
+        .catch(() => undefined);
+      load = current;
+    }
+    const snapshots = await load.promise;
+    if (load.seq >= this.appliedSeq) {
+      this.appliedSeq = load.seq;
+      this.live = { gen, loadedAt: now, snapshots };
+    }
     return { gen, snapshots };
   }
 
@@ -174,11 +195,6 @@ export class FeedService {
       segmentIds: r.segmentIds,
       payload: r.payload as unknown as FeedGroup,
     }));
-  }
-
-  /** Для тестов и kill switch: забыть набор в памяти этого инстанса. */
-  reset(): void {
-    this.live = null;
   }
 }
 

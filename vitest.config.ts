@@ -22,7 +22,12 @@ export default defineConfig({
           name: 'unit',
           environment: 'node',
           include: ['{packages,apps}/*/{src,test}/**/*.test.ts'],
-          exclude: ['**/*.int.test.ts', 'packages/web-player/**', 'apps/admin/**', '**/node_modules/**'],
+          exclude: [
+            '**/*.int.test.ts',
+            'packages/web-player/**',
+            'apps/admin/**',
+            '**/node_modules/**',
+          ],
         },
       },
       {
@@ -64,7 +69,8 @@ export default defineConfig({
         'apps/worker/src/media/polyglot.ts',
         'apps/worker/src/media/process.ts',
       ],
-      thresholds: { lines: 90, functions: 90, statements: 90, branches: 85 },
+      // perFile: порог действует для каждого модуля отдельно, а не для суммы (раздел 12).
+      thresholds: { perFile: true, lines: 90, functions: 90, statements: 90, branches: 85 },
     },
   },
 });

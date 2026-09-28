@@ -147,7 +147,11 @@ const workers = [
     { ...base, concurrency: 1 },
   ),
 ];
+for (const q of [analyticsQueue, schedulerQueue, maintenanceQueue]) {
+  q.on('error', (err) => logger.error({ err, queue: q.name }, 'Ошибка очереди'));
+}
 for (const w of workers) {
+  w.on('error', (err) => logger.error({ err, queue: w.name }, 'Ошибка воркера очереди'));
   w.on('failed', (job, err) =>
     logger.error({ err, queue: w.name, jobId: job?.id }, 'Фоновая задача упала'),
   );

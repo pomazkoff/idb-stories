@@ -11,6 +11,7 @@ import {
   type AuditContext,
   type BuildAsset,
   type GroupSourceView,
+  securityContext,
 } from '@idb-stories/core';
 import type { Prisma } from '@idb-stories/db';
 import {
@@ -127,12 +128,16 @@ export class WorkflowService {
       if (g.status !== 'in_review')
         throw conflict('Согласовать можно только группу на согласовании', 'invalid_state');
       assertRevision(g, revision);
+      if (g.endAt <= now) {
+        // Период показа закончился, пока группа ждала согласования: снимок никогда бы не показался.
+        throw conflict('Группа не готова к публикации', 'not_ready', {
+          problems: ['Период показа уже закончился'],
+        });
+      }
       // Правило четырёх глаз: никто из правивших эту версию не может её согласовать.
       if (g.editorsSinceApproval.includes(actor.id) || g.lastEditedById === actor.id) {
         this.deps.security.emit('four_eyes.violation', {
-          actorId: actor.id,
-          ip: audit.ip ?? null,
-          requestId: audit.requestId ?? null,
+          ...securityContext(audit),
           details: { groupId: id, revision },
         });
         throw forbidden(FOUR_EYES_MESSAGE, 'four_eyes');
@@ -141,9 +146,7 @@ export class WorkflowService {
       const ctaIssues = ctaProblems(g, allowlist);
       if (ctaIssues.length > 0) {
         this.deps.security.emit('cta.rejected', {
-          actorId: actor.id,
-          ip: audit.ip ?? null,
-          requestId: audit.requestId ?? null,
+          ...securityContext(audit),
           details: { stage: 'approve', groupId: id },
         });
         throw conflict('CTA не проходят allowlist', 'cta_not_allowed', { problems: ctaIssues });
@@ -205,9 +208,14 @@ export class WorkflowService {
     if (snapshot.startAt <= now && now < snapshot.endAt) {
       const res = await publishSnapshot(this.deps.publishing, snapshot.id, audit, 'approve', now);
       if (!res.ok && res.reason === 'cta_not_allowed') {
-        throw conflict('Публикация заблокирована: CTA вне allowlist', 'cta_not_allowed', {
-          slides: res.slides,
-        });
+        // Согласование уже сохранено (снимок approved); не опубликовано из-за сузившегося allowlist.
+        throw conflict(
+          'Версия согласована, но не опубликована: CTA вне allowlist',
+          'cta_not_allowed',
+          {
+            slides: res.slides,
+          },
+        );
       }
     }
     return this.groups.get(id, actor);

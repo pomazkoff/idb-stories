@@ -1,7 +1,7 @@
 import type { CdnPurgeAdapter, ObjectStorage } from '@idb-stories/adapters';
 import type { Prisma, PrismaClient } from '@idb-stories/db';
 import { checkCta, type FeedGroup } from '@idb-stories/schema';
-import { writeAudit, type AuditContext } from './audit.js';
+import { securityContext, writeAudit, type AuditContext } from './audit.js';
 import { bumpFeedGeneration } from './feed/service.js';
 import type { Logger } from './logger.js';
 import { MediaVariants, PUBLIC_MEDIA_CACHE_CONTROL, variantFiles } from './media.js';
@@ -97,9 +97,7 @@ export async function publishSnapshot(
   );
   if (violations.length > 0) {
     deps.security.emit('cta.rejected', {
-      actorId: ctx.actorId,
-      ip: ctx.ip ?? null,
-      requestId: ctx.requestId ?? null,
+      ...securityContext(ctx),
       details: {
         stage: 'publish',
         groupId: snap.groupId,
@@ -114,6 +112,7 @@ export async function publishSnapshot(
 
   const published = await deps.prisma
     .$transaction(async (tx) => {
+      await lockGroupRow(tx, snap.groupId);
       await tx.publishedSnapshot.updateMany({
         where: { groupId: snap.groupId, state: 'published' },
         data: { state: 'superseded', supersededAt: now },
@@ -149,15 +148,22 @@ export async function publishSnapshot(
     business_hours: isBusinessHours(now) ? 'yes' : 'no',
   });
   deps.security.emit('group.published', {
-    actorId: ctx.actorId,
-    ip: ctx.ip ?? null,
-    requestId: ctx.requestId ?? null,
+    ...securityContext(ctx),
     details: { groupId: snap.groupId, version: snap.version, trigger },
   });
   return { ok: true };
 }
 
 class SnapshotRaceError extends Error {}
+
+/**
+ * Единый порядок блокировок: сначала строка группы, потом её снимки. Правка группы
+ * (GroupsService.mutate) берёт блокировки в том же порядке — иначе параллельные правка и
+ * публикация одной группы могли бы взаимно заблокироваться (40P01).
+ */
+async function lockGroupRow(tx: Prisma.TransactionClient, groupId: string): Promise<void> {
+  await tx.$queryRaw`SELECT id FROM story_group WHERE id = ${groupId}::uuid FOR UPDATE`;
+}
 
 /**
  * Снятие с публикации: опубликованный и ожидающий снимки → archived. Одно действие (раздел 10.8).
@@ -170,6 +176,7 @@ export async function unpublishGroup(
   now: Date = new Date(),
 ): Promise<{ archivedVersions: number[] }> {
   const archivedVersions = await deps.prisma.$transaction(async (tx) => {
+    await lockGroupRow(tx, groupId);
     const snaps = await tx.publishedSnapshot.findMany({
       where: { groupId, state: { in: ['published', 'approved'] } },
       select: { id: true, version: true },
@@ -197,9 +204,7 @@ export async function unpublishGroup(
     business_hours: isBusinessHours(now) ? 'yes' : 'no',
   });
   deps.security.emit('group.unpublished', {
-    actorId: ctx.actorId,
-    ip: ctx.ip ?? null,
-    requestId: ctx.requestId ?? null,
+    ...securityContext(ctx),
     details: { groupId, archivedVersions, reason },
   });
   return { archivedVersions };
@@ -258,10 +263,13 @@ export async function runSchedulerTick(
   });
   for (const s of expired) {
     await deps.prisma.$transaction(async (tx) => {
-      await tx.publishedSnapshot.update({
-        where: { id: s.id },
+      await lockGroupRow(tx, s.groupId);
+      // Состояние перепроверяется: между выборкой и этой транзакцией снимок могли снять или заменить.
+      const res = await tx.publishedSnapshot.updateMany({
+        where: { id: s.id, state: { in: ['approved', 'published'] } },
         data: { state: 'archived', archivedAt: now },
       });
+      if (res.count === 0) return;
       await tx.storyGroup.updateMany({
         where: {
           id: s.groupId,

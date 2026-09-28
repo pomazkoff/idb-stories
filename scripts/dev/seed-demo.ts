@@ -5,8 +5,26 @@
  */
 import { api, login, sharp, upload } from './client.js';
 
-const COLORS = ['#c2185b', '#7b1fa2', '#303f9f', '#0288d1', '#00796b', '#689f38', '#f57c00', '#5d4037'];
-const TITLES = ['Новинки осени', 'Ароматы сезона', 'Уход за кожей', 'Выбор редакции', 'Подарки', 'Скидки недели', 'Макияж', 'Для него'];
+const COLORS = [
+  '#c2185b',
+  '#7b1fa2',
+  '#303f9f',
+  '#0288d1',
+  '#00796b',
+  '#689f38',
+  '#f57c00',
+  '#5d4037',
+];
+const TITLES = [
+  'Новинки осени',
+  'Ароматы сезона',
+  'Уход за кожей',
+  'Выбор редакции',
+  'Подарки',
+  'Скидки недели',
+  'Макияж',
+  'Для него',
+];
 const PLACEMENTS = ['home', 'catalog', 'product', 'cart'] as const;
 
 const editor = await login('mock-editor');
@@ -18,7 +36,9 @@ for (let i = 0; i < count; i++) {
   const color = COLORS[i % COLORS.length]!;
   const cover = await upload(
     editor,
-    await sharp({ create: { width: 512, height: 512, channels: 3, background: color } }).jpeg().toBuffer(),
+    await sharp({ create: { width: 512, height: 512, channels: 3, background: color } })
+      .jpeg()
+      .toBuffer(),
     'cover',
   );
   let group = await api<{ id: string; revision: number }>(editor, 'POST', '/groups', {
@@ -33,7 +53,14 @@ for (let i = 0; i < count; i++) {
   for (let s = 0; s < 3; s++) {
     const media = await upload(
       editor,
-      await sharp({ create: { width: 1080, height: 1920, channels: 3, background: COLORS[(i + s + 1) % COLORS.length]! } })
+      await sharp({
+        create: {
+          width: 1080,
+          height: 1920,
+          channels: 3,
+          background: COLORS[(i + s + 1) % COLORS.length]!,
+        },
+      })
         .jpeg()
         .toBuffer(),
       'slide',
@@ -42,7 +69,14 @@ for (let i = 0; i < count; i++) {
       type: 'image',
       mediaAssetId: media,
       durationMs: 5000,
-      elements: [{ kind: 'text', text: `${TITLES[i % TITLES.length]} · ${s + 1}`, style: 'title', position: 'top' }],
+      elements: [
+        {
+          kind: 'text',
+          text: `${TITLES[i % TITLES.length]} · ${s + 1}`,
+          style: 'title',
+          position: 'top',
+        },
+      ],
       cta: s === 2 ? { type: 'url', value: 'https://iledebeaute.ru/', label: 'В магазин' } : null,
     });
   }

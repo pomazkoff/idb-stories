@@ -74,6 +74,10 @@ export function createDeps(config: Config, overrides: DepsOverrides = {}): AppDe
     }),
     eventsIngest: new Queue(QUEUES.eventsIngest, queueOpts),
   };
+  // Без слушателя BullMQ бросает 'error' как необработанное исключение (например, закрытие при недоступном Redis).
+  for (const q of Object.values(queues)) {
+    q.on('error', (err) => logger.error({ err, queue: q.name }, 'Ошибка очереди'));
+  }
   const storage =
     overrides.storage ??
     new S3ObjectStorage({

@@ -47,20 +47,16 @@ export function installErrorHandler(
     }
     const status = typeof err.statusCode === 'number' ? err.statusCode : 500;
     if (status === 413) {
-      return reply
-        .status(413)
-        .send({
-          error: { code: 'payload_too_large', message: 'Слишком большой запрос' },
-          requestId: req.id,
-        });
+      return reply.status(413).send({
+        error: { code: 'payload_too_large', message: 'Слишком большой запрос' },
+        requestId: req.id,
+      });
     }
     if (status === 429) {
-      return reply
-        .status(429)
-        .send({
-          error: { code: 'rate_limited', message: 'Слишком много запросов' },
-          requestId: req.id,
-        });
+      return reply.status(429).send({
+        error: { code: 'rate_limited', message: 'Слишком много запросов' },
+        requestId: req.id,
+      });
     }
     if (status >= 400 && status < 500) {
       return reply.status(status).send({

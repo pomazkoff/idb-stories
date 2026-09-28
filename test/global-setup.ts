@@ -58,6 +58,8 @@ export default async function setup(project: TestProject) {
       password: 'postgres',
       port,
       persistent: false,
+      // Как в проде: UTF8, иначе char_length и varchar считают байты кириллицы.
+      initdbFlags: ['--encoding=UTF8', '--locale=C'],
       onLog: () => {},
     });
     await server.initialise();

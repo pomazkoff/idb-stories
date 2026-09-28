@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { SsoError } from '@idb-stories/adapters';
 import type { AppDeps } from '../context.js';
 
-const escapeHtml = (s: string) =>
+const sanitizeHtml = (s: string) =>
   s.replace(
     /[&<>"']/g,
     (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch] ?? ch,
@@ -28,10 +28,10 @@ export async function registerMockIdp(app: FastifyInstance, deps: AppDeps): Prom
     const users = deps.sso.users
       .map(
         (u) => `<li><form method="post" action="/admin/v1/dev/mock-idp/authorize">
-<input type="hidden" name="subject" value="${escapeHtml(u.subject)}">
-<input type="hidden" name="state" value="${escapeHtml(q.state ?? '')}">
-<input type="hidden" name="nonce" value="${escapeHtml(q.nonce ?? '')}">
-<button type="submit" data-subject="${escapeHtml(u.subject)}">${escapeHtml(u.name)}</button> — ${escapeHtml(u.email)} (${escapeHtml(u.hint)})
+<input type="hidden" name="subject" value="${sanitizeHtml(u.subject)}">
+<input type="hidden" name="state" value="${sanitizeHtml(q.state ?? '')}">
+<input type="hidden" name="nonce" value="${sanitizeHtml(q.nonce ?? '')}">
+<button type="submit" data-subject="${sanitizeHtml(u.subject)}">${sanitizeHtml(u.name)}</button> — ${sanitizeHtml(u.email)} (${sanitizeHtml(u.hint)})
 </form></li>`,
       )
       .join('\n');

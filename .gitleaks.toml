@@ -10,6 +10,8 @@ regexes = [
   '''dev-[a-z0-9-]*(password|secret|key)[a-z0-9-]*''',
   '''test-customer-secret-0123456789abcdef''',
   '''(owner|app)_test_pw''',
+  # Фиктивный JWT из packages/core/test/logger.test.ts (проверка маскирования, не настоящий токен).
+  '''eyJhbGciOiJIUzI1NiJ9\.eyJzdWIiOiJ1c2VyLTEyMyJ9\.c2lnbmF0dXJlLXNpZ25hdHVyZQ''',
 ]
 paths = [
   '''pnpm-lock\.yaml''',

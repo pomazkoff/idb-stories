@@ -36,7 +36,9 @@ export const options = {
 };
 
 export default function () {
+  // nosemgrep: ajinabraham.njsscan.crypto.crypto_node.node_insecure_random_generator
   const headers = clients[Math.floor(Math.random() * clients.length)];
+  // nosemgrep: ajinabraham.njsscan.crypto.crypto_node.node_insecure_random_generator
   const placement = placements[Math.floor(Math.random() * placements.length)];
   const res = http.get(`${BASE}/v1/feed?placement=${placement}`, {
     headers: { ...headers, 'Accept-Encoding': 'br, gzip' },

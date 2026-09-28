@@ -31,8 +31,10 @@ rules:
       - pattern-either:
           - pattern: $P.$queryRawUnsafe(`...${$X}...`, ...)
           - pattern: $P.$executeRawUnsafe(`...${$X}...`, ...)
+          # Вызовы с явным type-аргументом ($queryRawUnsafe<T>(...)) структурный паттерн не матчит.
+          - pattern-regex: '\.\$(queryRawUnsafe|executeRawUnsafe)\s*<[^(]*>\s*\(\s*`[^`]*\$\{'
     paths:
-      exclude: ['test/**', '**/test/**', 'scripts/**']
+      exclude: ['**/test/**', '/scripts/**']
   - id: idb-no-logging-of-authorization
     languages: [typescript]
     severity: ERROR
@@ -46,5 +48,5 @@ rules:
     message: 'ffmpeg/ffprobe запускаются только через run() с INPUT_GUARD (protocol_whitelist file, -f mov)'
     pattern: spawn($BIN, ...)
     paths:
-      include: ['apps/worker/**']
-      exclude: ['apps/worker/src/media/exec.ts']
+      include: ['/apps/worker/**']
+      exclude: ['/apps/worker/src/media/exec.ts']

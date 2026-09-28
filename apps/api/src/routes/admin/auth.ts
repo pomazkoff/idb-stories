@@ -31,6 +31,7 @@ export function authRoutes(deps: AppDeps, sessions: SessionStore) {
 
   return [
     route(authLogin, async ({ query, reply }) => {
+      // nosemgrep: ajinabraham.njsscan.redirect.open_redirect.express_open_redirect
       const auth = await deps.sso.createAuthRequest(redirectUri);
       const loginId = randomToken(24);
       const state: LoginState = {

@@ -247,11 +247,10 @@ describe('события → агрегаты → статистика', () => {
     );
     expect(retry.inserted).toBe(0);
 
-    const today = new Date().toISOString().slice(0, 10);
     const stats = await api.admin(
       analyst,
       'GET',
-      `/admin/v1/stats/groups/${group.id}?from=2026-01-01&to=${today > '2026-12-31' ? today : '2026-12-31'}`,
+      `/admin/v1/stats/groups/${group.id}?from=2026-01-01&to=2099-12-31`,
     );
     expect(stats.statusCode, stats.body).toBe(200);
     const body = stats.json<GroupStats>();

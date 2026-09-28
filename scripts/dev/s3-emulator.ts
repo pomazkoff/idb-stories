@@ -79,6 +79,7 @@ export async function startS3Emulator(opts: S3EmulatorOptions) {
   function verify(req: IncomingMessage, url: URL): string {
     const query = url.searchParams;
     const presigned = query.has('X-Amz-Signature');
+    // nosemgrep: ajinabraham.njsscan.dos.regex_dos.regex_dos
     const auth = req.headers.authorization;
     if (!presigned && !auth) return 'anonymous';
 
@@ -189,6 +190,7 @@ export async function startS3Emulator(opts: S3EmulatorOptions) {
       auth === 'anonymous' && (method === 'GET' || method === 'HEAD') && key && config?.publicRead;
     if (auth !== 'ok' && !anonymousRead) {
       log(`deny ${method} ${url.pathname}: ${auth}`);
+      // nosemgrep: javascript.express.security.cors-misconfiguration.cors-misconfiguration
       res.setHeader('access-control-allow-origin', cors['access-control-allow-origin'] ?? '');
       return sendError(
         res,

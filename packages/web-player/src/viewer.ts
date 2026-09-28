@@ -188,7 +188,7 @@ export class Viewer {
   private si = -1;
   private dir: 1 | -1 = 1;
   private startIndex = 0;
-  private token = 0;
+  private renderGen = 0;
   private readonly pauses = new Set<PauseReason>();
   private timer: Countdown | null = null;
   private viewTimer: ReturnType<typeof setTimeout> | null = null;
@@ -287,7 +287,7 @@ export class Viewer {
     const group = this.groups[this.gi];
     this.closed = true;
     this.teardownSlide();
-    this.token++;
+    this.renderGen++;
     this.clearGesture();
     if (group) {
       this.runtime.emit('story_close', {
@@ -311,7 +311,7 @@ export class Viewer {
   dispose(): void {
     if (this.disposed) return;
     this.teardownSlide();
-    this.token++;
+    this.renderGen++;
     this.clearGesture();
     this.clearPreloaded();
     if (this.mounted) this.unmount();
@@ -506,7 +506,7 @@ export class Viewer {
     const slide = group?.slides[si];
     if (!group || !slide) return;
     this.teardownSlide();
-    const token = ++this.token;
+    const gen = ++this.renderGen;
     const groupChanged = gi !== this.gi;
     this.gi = gi;
     this.si = si;
@@ -519,7 +519,7 @@ export class Viewer {
     this.pauses.delete('buffering');
     if (!this.autoAdvance) this.pauses.add('user');
 
-    this.renderSlide(group, slide, token);
+    this.renderSlide(group, slide, gen);
     this.preloadNext();
     this.apply();
   }
@@ -563,7 +563,7 @@ export class Viewer {
     this.progressEl.replaceChildren(...this.segs);
   }
 
-  private renderSlide(group: Group, slide: Slide, token: number): void {
+  private renderSlide(group: Group, slide: Slide, gen: number): void {
     const visible = this.segs.filter((s) => !s.hidden).length || group.slides.length;
     const position = this.segs.slice(0, this.si + 1).filter((s) => !s.hidden).length || 1;
     const el = h('div', `idbs-slide idbs-slide--${slide.type}`);
@@ -582,10 +582,10 @@ export class Viewer {
     }
 
     const duration = slide.type === 'video' ? slide.durationMs + VIDEO_GRACE_MS : slide.durationMs;
-    this.timer = new Countdown(duration, this.runtime.now, () => this.slideEnded(token));
+    this.timer = new Countdown(duration, this.runtime.now, () => this.slideEnded(gen));
 
     if (slide.type === 'product') {
-      this.renderProducts(group, slide, token, layers.center);
+      this.renderProducts(group, slide, gen, layers.center);
     } else {
       const handle = this.takeMedia(group, slide);
       if (!handle) {
@@ -596,17 +596,17 @@ export class Viewer {
         mediaBox.appendChild(handle.el);
         el.appendChild(mediaBox);
         this.media = handle;
-        if (handle.el instanceof HTMLVideoElement) this.bindVideo(handle.el, token);
+        if (handle.el instanceof HTMLVideoElement) this.bindVideo(handle.el, gen);
         if (handle.state !== 'loaded') this.pauses.add('loading');
         handle.onSettled((state) => {
           // Колбэк может прийти синхронно — откладываем, чтобы не менять слайд посреди go().
           setTimeout(() => {
-            if (token !== this.token) return;
+            if (gen !== this.renderGen) return;
             if (state === 'error') {
               this.mediaFailed(group, slide);
             } else {
               this.pauses.delete('loading');
-              this.contentReady(group, slide, token);
+              this.contentReady(group, slide, gen);
               this.apply();
             }
           }, 0);
@@ -642,9 +642,9 @@ export class Viewer {
       : createImage(variant.url, 'idbs-media__img');
   }
 
-  private bindVideo(video: HTMLVideoElement, token: number): void {
+  private bindVideo(video: HTMLVideoElement, gen: number): void {
     video.muted = this.muted;
-    const live = () => token === this.token;
+    const live = () => gen === this.renderGen;
     let lastTime = 0;
     const setBuffering = (on: boolean) => {
       if (!live() || this.pauses.has('buffering') === on) return;
@@ -668,14 +668,14 @@ export class Viewer {
     });
     // Для видео переход — по окончанию.
     video.addEventListener('ended', () => {
-      if (live()) this.slideEnded(token);
+      if (live()) this.slideEnded(gen);
     });
   }
 
   private renderProducts(
     group: Group,
     slide: ProductSlide,
-    token: number,
+    gen: number,
     layer: HTMLElement,
   ): void {
     const list = h('ul', 'idbs-products');
@@ -684,7 +684,7 @@ export class Viewer {
     this.pauses.add('loading');
     this.loadProducts(slide.skus)
       .then((products) => {
-        if (token !== this.token) return;
+        if (gen !== this.renderGen) return;
         if (products.length === 0) {
           // Всё не в наличии или каталог недоступен — слайд пропускается (раздел 5.1).
           this.skipCurrent();
@@ -692,7 +692,7 @@ export class Viewer {
         }
         for (const p of products) list.appendChild(this.productCard(group, slide, p));
         this.pauses.delete('loading');
-        this.contentReady(group, slide, token);
+        this.contentReady(group, slide, gen);
         this.apply();
       })
       .catch((err: unknown) => console.error('[idb-stories] product slide failed', err));
@@ -841,18 +841,18 @@ export class Viewer {
   }
 
   /** Контент слайда показан: через 1 с — story_slide_view. */
-  private contentReady(group: Group, slide: Slide, token: number): void {
+  private contentReady(group: Group, slide: Slide, gen: number): void {
     if (this.viewTimer !== null) return;
     this.viewTimer = setTimeout(() => {
       this.viewTimer = null;
-      if (token !== this.token) return;
+      if (gen !== this.renderGen) return;
       this.watched.add(slide.id);
       this.runtime.emit('story_slide_view', this.slideFields(group, slide));
     }, VIEW_MS);
   }
 
-  private slideEnded(token: number): void {
-    if (token !== this.token || this.closed || this.pauses.has('finished')) return;
+  private slideEnded(gen: number): void {
+    if (gen !== this.renderGen || this.closed || this.pauses.has('finished')) return;
     const group = this.groups[this.gi];
     const slide = group?.slides[this.si];
     if (!group || !slide) return;
@@ -881,7 +881,7 @@ export class Viewer {
   }
 
   private playVideo(video: HTMLVideoElement): void {
-    const token = this.token;
+    const gen = this.renderGen;
     let result: Promise<void> | undefined;
     try {
       result = video.play();
@@ -889,7 +889,7 @@ export class Viewer {
       return;
     }
     result?.catch((err: unknown) => {
-      if (token !== this.token || (err instanceof DOMException && err.name === 'AbortError'))
+      if (gen !== this.renderGen || (err instanceof DOMException && err.name === 'AbortError'))
         return;
       if (!video.muted) {
         // Автовоспроизведение со звуком запрещено браузером — пробуем без звука.

@@ -15,7 +15,8 @@ export default defineConfig({
   // Сценарий включает обработку медиа воркером и ожидание ленты — даём запас.
   timeout: 5 * 60_000,
   expect: { timeout: 15_000 },
-  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
+  // github — аннотации к упавшим тестам видны в Actions без чтения логов.
+  reporter: process.env.CI ? [['github'], ['list'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:8082',
     locale: 'ru-RU',

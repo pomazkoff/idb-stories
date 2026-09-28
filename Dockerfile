@@ -31,9 +31,14 @@ CMD ["sh", "-c", "pnpm db:migrate && pnpm db:seed && pnpm --filter @idb-stories/
 
 # ---------------------------------------------------------------------------
 FROM ${NODE_IMAGE} AS runtime
+# npm, corepack и yarn из базового образа в рантайме не используются, а их зависимости регулярно
+# приносят HIGH CVE (trivy) — удаляем: процессы запускаются напрямую через node.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends openssl ca-certificates tini \
- && rm -rf /var/lib/apt/lists/*
+ && rm -rf /var/lib/apt/lists/* \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+      /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+      /opt/yarn-v* /usr/local/bin/yarn /usr/local/bin/yarnpkg
 ENV NODE_ENV=production
 WORKDIR /app
 USER node

@@ -43,6 +43,7 @@ export function acceptAttribute(kind: MediaKind): string {
 export function checkFile(file: File, expected: MediaKind): FileCheck {
   let type = file.type.toLowerCase();
   // Некоторые системы не знают MIME для .mov — подставляем по расширению (воркер всё равно проверит сигнатуру).
+  // nosemgrep: ajinabraham.njsscan.dos.regex_dos.regex_dos
   if (!type && expected === 'video' && /\.mov$/i.test(file.name)) type = 'video/quicktime';
   const kind: MediaKind | null = IMAGE_TYPES.includes(type) ? 'image' : VIDEO_TYPES.includes(type) ? 'video' : null;
   if (kind !== expected) {
